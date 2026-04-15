@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { color-scheme: light dark; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+}
+
+@layer components {
+  .pill { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium; }
+  .pill-necessary  { background:#EAF3DE; color:#3B6D11; }
+  .pill-functional { background:#E6F1FB; color:#185FA5; }
+  .pill-analytics  { background:#FAEEDA; color:#854F0B; }
+  .pill-advertising{ background:#FAECE7; color:#993C1D; }
+  .pill-unknown    { background:#F1EFE8; color:#5F5E5A; }
+  .pill-high       { background:#FAECE7; color:#993C1D; }
+  .pill-medium     { background:#FAEEDA; color:#854F0B; }
+  .pill-low        { background:#EAF3DE; color:#3B6D11; }
+  .pill-none       { background:#EAF3DE; color:#3B6D11; }
+  .card { @apply bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg; }
+  .btn  { @apply px-3 py-1.5 rounded-md text-sm font-medium border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition; }
+  .btn-primary { @apply px-3 py-1.5 rounded-md text-sm font-medium bg-stone-900 text-white hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white transition; }
+  .input { @apply w-full px-3 py-2 rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400; }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white !important; color: black !important; }
+}
