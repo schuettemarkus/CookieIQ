@@ -21,8 +21,10 @@ export const SEVERITY_BG = {
   None:   '#EAF3DE',
 };
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 export async function api(path, opts = {}) {
-  const res = await fetch(path, {
+  const res = await fetch(API_BASE + path, {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
