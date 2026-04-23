@@ -1,5 +1,19 @@
 import { Router } from 'express';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import { existsSync } from 'node:fs';
+
+function getChromePath() {
+  const paths = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+  ];
+  for (const p of paths) { if (existsSync(p)) return p; }
+  return null;
+}
+
+const CHROME_PATH = getChromePath();
 import { lookupCookie, vendorFromDomain } from '../cookieLookup.js';
 import { recordScan } from '../db.js';
 
@@ -24,10 +38,12 @@ function durationFromExpires(expires) {
 }
 
 export async function runScan(targetUrl, depth = 'homepage') {
-  const browser = await puppeteer.launch({
+  const launchOpts = {
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process'],
-  });
+  };
+  if (CHROME_PATH) launchOpts.executablePath = CHROME_PATH;
+  const browser = await puppeteer.launch(launchOpts);
   try {
     const page = await browser.newPage();
     await page.setUserAgent(
