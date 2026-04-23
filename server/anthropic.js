@@ -11,13 +11,29 @@ export function extractText(message) {
     .trim();
 }
 
+function stripCitations(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/<cite[^>]*>([^<]*)<\/cite>/g, '$1').replace(/<\/?cite[^>]*>/g, '');
+}
+
+function deepStripCitations(obj) {
+  if (typeof obj === 'string') return stripCitations(obj);
+  if (Array.isArray(obj)) return obj.map(deepStripCitations);
+  if (obj && typeof obj === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) out[k] = deepStripCitations(v);
+    return out;
+  }
+  return obj;
+}
+
 export function extractJSON(text) {
-  // Strip code fences if present, then find first { ... } block.
-  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-  try { return JSON.parse(cleaned); } catch {}
+  // Strip citation tags and code fences, then find first { ... } block.
+  const cleaned = stripCitations(text).replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  try { return deepStripCitations(JSON.parse(cleaned)); } catch {}
   const m = cleaned.match(/[\[{][\s\S]*[\]}]/);
   if (m) {
-    try { return JSON.parse(m[0]); } catch {}
+    try { return deepStripCitations(JSON.parse(m[0])); } catch {}
   }
   throw new Error('Model did not return valid JSON');
 }
