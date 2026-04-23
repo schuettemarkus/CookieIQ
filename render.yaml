@@ -1,14 +1,9 @@
 services:
   - type: web
     name: cookieiq-api
-    runtime: node
-    buildCommand: |
-      apt-get update -qq && apt-get install -y --no-install-recommends chromium && which chromium && npm install
-    startCommand: node server/index.js
+    runtime: docker
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: PORT
         value: 3001
-      - key: PUPPETEER_ARGS
-        value: "--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage"

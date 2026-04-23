@@ -3,19 +3,10 @@ import puppeteer from 'puppeteer-core';
 import { execSync } from 'node:child_process';
 
 function getChromePath() {
-  // Env var override (set in Render dashboard if needed)
   if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
-  // Try `which` to find whatever is installed
   try {
-    const p = execSync('which chromium || which chromium-browser || which google-chrome-stable || which google-chrome', { encoding: 'utf8', timeout: 3000 }).trim();
-    if (p) return p;
-  } catch {}
-  // Broad search as last resort
-  try {
-    const p = execSync('find / -name "chromium" -o -name "chrome" -o -name "chromium-browser" 2>/dev/null | grep -E "bin/(chromium|chrome)" | head -1', { encoding: 'utf8', timeout: 5000 }).trim();
-    if (p) return p;
-  } catch {}
-  return null;
+    return execSync('which chromium || which chromium-browser || which google-chrome-stable || which google-chrome 2>/dev/null', { encoding: 'utf8', timeout: 3000 }).trim() || null;
+  } catch { return null; }
 }
 
 const CHROME_PATH = getChromePath();
