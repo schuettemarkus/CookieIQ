@@ -11,11 +11,8 @@ const SEGMENTS = [
 export default function CategoryChart({ breakdown = {} }) {
   const total = SEGMENTS.reduce((sum, s) => sum + (breakdown[s.key] || 0), 0) || 1;
   return (
-    <section className="space-y-2">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">
-        Category distribution
-      </h3>
-      <div className="flex h-3 w-full rounded-full overflow-hidden border border-stone-200 dark:border-stone-800">
+    <div className="space-y-3">
+      <div className="flex h-4 w-full rounded-full overflow-hidden border border-stone-200">
         {SEGMENTS.map(s => {
           const pct = ((breakdown[s.key] || 0) / total) * 100;
           if (pct === 0) return null;
@@ -29,7 +26,7 @@ export default function CategoryChart({ breakdown = {} }) {
           return (
             <div key={s.key} className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-sm" style={{ background: s.color }} />
-              <span className="text-stone-600 dark:text-stone-400">{s.label}</span>
+              <span className="text-stone-600">{s.label}</span>
               <span className="font-mono">{pct}%</span>
             </div>
           );
@@ -38,6 +35,6 @@ export default function CategoryChart({ breakdown = {} }) {
       <p className="text-xs text-stone-500">
         Based on analysis of {total} cookie policy reference{total === 1 ? '' : 's'} found online
       </p>
-    </section>
+    </div>
   );
 }

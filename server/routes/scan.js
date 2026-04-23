@@ -33,20 +33,29 @@ export async function runScan(targetUrl, depth = 'homepage') {
     await page.setUserAgent(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'
     );
-    const thirdPartyDomains = new Set();
     const targetHost = new URL(targetUrl).hostname;
+
+    const cdp = await page.target().createCDPSession();
+    await cdp.send('Network.enable');
+
+    // Track every distinct third-party host hit, with sample request types.
+    const trackerHosts = new Map(); // host -> { types: Set, requests: number }
     page.on('request', req => {
       try {
         const host = new URL(req.url()).hostname;
-        if (host && !host.endsWith(targetHost)) thirdPartyDomains.add(host);
+        if (!host || host === targetHost || host.endsWith('.' + targetHost)) return;
+        if (!trackerHosts.has(host)) trackerHosts.set(host, { types: new Set(), requests: 0 });
+        const entry = trackerHosts.get(host);
+        entry.types.add(req.resourceType());
+        entry.requests++;
       } catch {}
     });
 
     await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
-    // Pre-consent snapshot.
-    const preConsentCookies = await page.cookies();
-    const preConsentNames = new Set(preConsentCookies.map(c => c.name + '|' + c.domain));
+    // Pre-consent snapshot uses CDP so we get third-party cookies too.
+    const preConsentRaw = (await cdp.send('Network.getAllCookies')).cookies;
+    const preConsentNames = new Set(preConsentRaw.map(c => c.name + '|' + c.domain));
 
     // Try to dismiss consent banners (best-effort).
     for (const sel of CONSENT_SELECTORS) {
@@ -74,7 +83,7 @@ export async function runScan(targetUrl, depth = 'homepage') {
       }
     }
 
-    const cookies = await page.cookies();
+    const cookies = (await cdp.send('Network.getAllCookies')).cookies;
 
     const storage = await page.evaluate(() => {
       const dump = obj => {
@@ -82,30 +91,53 @@ export async function runScan(targetUrl, depth = 'homepage') {
         try { for (let i = 0; i < obj.length; i++) out.push(obj.key(i)); } catch {}
         return out;
       };
+      // Detect fingerprinting signals.
+      const fpSignals = [];
+      try {
+        const scripts = [...document.querySelectorAll('script[src]')].map(s => s.src);
+        const fpLibs = ['fingerprintjs', 'fp2', 'clientjs', 'evercookie', 'canvas-fingerprint'];
+        for (const src of scripts) {
+          const lower = src.toLowerCase();
+          for (const lib of fpLibs) if (lower.includes(lib)) fpSignals.push(lib);
+        }
+        // Check for canvas fingerprint read
+        const canvases = document.querySelectorAll('canvas');
+        if (canvases.length > 0) fpSignals.push('canvas-element-present');
+      } catch {}
       return {
         localStorage: dump(localStorage),
         sessionStorage: dump(sessionStorage),
         documentCookie: document.cookie,
+        fingerprintSignals: fpSignals,
       };
     });
 
+    const isThirdPartyDomain = (cookieDomain) => {
+      const d = (cookieDomain || '').replace(/^\./, '').toLowerCase();
+      return !!d && d !== targetHost && !d.endsWith('.' + targetHost) && !targetHost.endsWith('.' + d);
+    };
+
     const results = cookies.map(c => {
-      const meta = lookupCookie(c.name);
+      const meta = lookupCookie(c.name, c.domain);
       const vendor = meta.vendor || vendorFromDomain(c.domain);
+      const thirdParty = isThirdPartyDomain(c.domain);
       return {
         name: c.name,
         domain: c.domain,
         duration: durationFromExpires(c.expires),
-        type: 'HTTP Cookie',
+        type: thirdParty ? 'HTTP Cookie (3rd party)' : 'HTTP Cookie',
         vendor: vendor || null,
+        thirdParty,
         preConsent: preConsentNames.has(c.name + '|' + c.domain),
         suggestedCategory: meta.suggestedCategory,
         knownCookie: meta.knownCookie,
+        description: meta.description || null,
+        source: meta.source || null,
       };
     });
 
     for (const key of storage.localStorage) {
-      const meta = lookupCookie(key);
+      const meta = lookupCookie(key, targetHost);
       results.push({
         name: key, domain: targetHost, duration: 'Persistent',
         type: 'localStorage', vendor: meta.vendor, preConsent: false,
@@ -113,7 +145,7 @@ export async function runScan(targetUrl, depth = 'homepage') {
       });
     }
     for (const key of storage.sessionStorage) {
-      const meta = lookupCookie(key);
+      const meta = lookupCookie(key, targetHost);
       results.push({
         name: key, domain: targetHost, duration: 'Session',
         type: 'sessionStorage', vendor: meta.vendor, preConsent: false,
@@ -121,25 +153,44 @@ export async function runScan(targetUrl, depth = 'homepage') {
       });
     }
 
-    // Surface tracking-pixel third parties even if no cookie was set.
-    const seenVendors = new Set(results.map(r => r.vendor).filter(Boolean));
-    for (const host of thirdPartyDomains) {
+    // Surface every third-party host that fired requests, even when no cookie was set.
+    // Distinguishes images/scripts/xhr so analysts see beacons vs. embedded SDKs.
+    const seenHosts = new Set(results.map(r => (r.domain || '').replace(/^\./, '').toLowerCase()));
+    for (const [host, info] of trackerHosts) {
+      if (seenHosts.has(host)) continue;
       const vendor = vendorFromDomain(host);
-      if (vendor && !seenVendors.has(vendor)) {
-        results.push({
-          name: `(pixel from ${host})`,
-          domain: host,
-          duration: 'N/A',
-          type: 'Pixel',
-          vendor,
-          preConsent: true,
-          suggestedCategory: 'Advertising',
-          knownCookie: true,
-        });
-        seenVendors.add(vendor);
-      }
+      const isLikelyBeacon = info.types.has('image') || info.types.has('ping') || info.types.has('beacon');
+      results.push({
+        name: `tracker · ${host}`,
+        domain: host,
+        duration: 'N/A',
+        type: isLikelyBeacon ? 'Tracking pixel' : 'Third-party request',
+        vendor: vendor || null,
+        thirdParty: true,
+        preConsent: true,
+        suggestedCategory: vendor ? 'Advertising' : 'Unknown',
+        knownCookie: !!vendor,
+        requestCount: info.requests,
+      });
+      seenHosts.add(host);
     }
 
+    // Fingerprinting signals.
+    if (storage.fingerprintSignals?.length > 0) {
+      results.push({
+        name: `fingerprinting: ${storage.fingerprintSignals.join(', ')}`,
+        domain: targetHost,
+        duration: 'N/A',
+        type: 'Fingerprint',
+        vendor: null,
+        thirdParty: false,
+        preConsent: true,
+        suggestedCategory: 'Advertising',
+        knownCookie: false,
+      });
+    }
+
+    await cdp.detach().catch(() => {});
     return results;
   } finally {
     await browser.close();

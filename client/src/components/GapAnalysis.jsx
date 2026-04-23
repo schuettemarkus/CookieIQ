@@ -40,7 +40,7 @@ export default function GapAnalysis({ scanCookies }) {
         <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500 mb-2">
           TrustArc sync & gap analysis
         </h3>
-        <label className="block border-2 border-dashed border-stone-300 dark:border-stone-700 rounded-lg p-6 text-center cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-900">
+        <label className="block border-2 border-dashed border-stone-300 rounded-2xl p-6 text-center cursor-pointer hover:bg-stone-50 transition-all">
           <input type="file" accept=".csv" className="hidden" onChange={e => e.target.files[0] && onFile(e.target.files[0])} />
           <div className="text-sm">Drop TrustArc cookie inventory CSV here</div>
           <div className="text-xs text-stone-500 mt-1">Export from TrustArc Cookie Manager → Inventory → Export CSV</div>
@@ -95,7 +95,7 @@ export default function GapAnalysis({ scanCookies }) {
         {miscategorized.map(m => (
           <li key={m.name} className="font-mono text-xs">
             {m.name} — In TrustArc as <strong>{m.oldCategory}</strong> → Should be <strong>{m.newCategory}</strong>
-            <button className="ml-2 text-blue-600 dark:text-blue-400 hover:underline">Fix</button>
+            <button className="ml-2 text-blue-600 hover:underline">Fix</button>
           </li>
         ))}
       </Bucket>
@@ -105,13 +105,13 @@ export default function GapAnalysis({ scanCookies }) {
 
 function Bucket({ title, tone, empty, children }) {
   const toneMap = {
-    red:    'border-red-300 bg-red-50/50 dark:bg-red-950/20',
-    gray:   'border-stone-300 bg-stone-50 dark:bg-stone-900',
-    amber:  'border-amber-300 bg-amber-50/50 dark:bg-amber-950/20',
+    red:    'bg-red-50/50',
+    gray:   'bg-stone-50',
+    amber:  'bg-amber-50/50',
   };
   const items = React.Children.toArray(children);
   return (
-    <div className={'rounded-md border p-3 ' + toneMap[tone]}>
+    <div className={'rounded-2xl shadow-sm p-4 ' + toneMap[tone]}>
       <div className="text-xs font-semibold uppercase mb-2">{title} ({items.length})</div>
       {items.length ? <ul className="space-y-1">{items}</ul> : <div className="text-xs text-stone-500">{empty}</div>}
     </div>

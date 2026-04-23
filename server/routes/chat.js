@@ -19,9 +19,34 @@ function compactProfile(p = {}) {
   };
 }
 
+function summariseScan(lastScan) {
+  if (!lastScan || !lastScan.cookies) return '';
+  const domain = lastScan.domain || lastScan.url || 'unknown';
+  const cookies = lastScan.cookies;
+  const total = cookies.length;
+  const cats = {};
+  cookies.forEach(c => {
+    const cat = c.suggestedCategory || 'Unknown';
+    cats[cat] = (cats[cat] || 0) + 1;
+  });
+  const breakdown = Object.entries(cats).map(([k, v]) => `${k}: ${v}`).join(', ');
+  const unknowns = cookies.filter(c => (c.suggestedCategory || 'Unknown') === 'Unknown').map(c => c.name).slice(0, 10);
+  let summary = `\nThe user has scanned ${domain} and found ${total} cookies. Breakdown by category: ${breakdown}.`;
+  if (unknowns.length > 0) {
+    summary += ` Uncategorized cookies: ${unknowns.join(', ')}.`;
+  }
+  summary += ' Reference this data when the user asks about their site.';
+  return summary;
+}
+
 function buildSystem(cookieProfile) {
-  return `You are CookieIQ, an expert on cookie compliance, GDPR, ePrivacy, CCPA. Be direct and cite regulations precisely. You serve privacy engineers and DPOs.
-Cookie context: ${JSON.stringify(compactProfile(cookieProfile))}`;
+  let base = 'You are CookieIQ, an expert on cookie compliance, GDPR, ePrivacy, CCPA. Be direct and cite regulations precisely. You serve privacy engineers and DPOs.';
+  if (cookieProfile && cookieProfile._siteContext) {
+    base += summariseScan(cookieProfile.lastScan);
+  } else {
+    base += `\nCookie context: ${JSON.stringify(compactProfile(cookieProfile))}`;
+  }
+  return base;
 }
 
 router.post('/', async (req, res) => {

@@ -16,10 +16,10 @@ export default function SourcesList({ sources = [], websites = [] }) {
             <div className="space-y-2">
               {sources.map((s, i) => (
                 <div key={i} className="text-sm">
-                  <a href={s.url} target="_blank" rel="noreferrer" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                  <a href={s.url} target="_blank" rel="noreferrer" className="font-medium text-blue-600 text-blue-600 hover:underline">
                     {s.name}
                   </a>
-                  {s.snippet && <p className="text-stone-600 dark:text-stone-400 mt-0.5">{s.snippet}</p>}
+                  {s.snippet && <p className="text-stone-600 text-stone-500 mt-0.5">{s.snippet}</p>}
                 </div>
               ))}
             </div>
@@ -28,12 +28,12 @@ export default function SourcesList({ sources = [], websites = [] }) {
             <div>
               <h4 className="text-xs font-semibold uppercase text-stone-500 mb-1.5">Websites using this cookie</h4>
               <table className="w-full text-sm">
-                <thead className="text-left text-xs text-stone-500 border-b border-stone-200 dark:border-stone-800">
+                <thead className="text-left text-xs text-stone-500 border-b border-stone-200 border-stone-100">
                   <tr><th className="py-1.5">Domain</th><th>Category assigned</th><th>Source</th></tr>
                 </thead>
                 <tbody>
                   {websites.map((w, i) => (
-                    <tr key={i} className="border-b border-stone-100 dark:border-stone-900">
+                    <tr key={i} className="border-b border-stone-100 border-stone-50">
                       <td className="py-1.5 font-mono text-xs">{w.domain}</td>
                       <td>{w.categoryAssigned}</td>
                       <td className="text-xs text-stone-500">{w.source}</td>

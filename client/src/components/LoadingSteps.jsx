@@ -14,7 +14,7 @@ export default function LoadingSteps({ steps = DEFAULT_STEPS, intervalMs = 1500 
     return () => clearInterval(t);
   }, [steps, intervalMs]);
   return (
-    <div className="card p-6 flex items-center gap-3">
+    <div className="card p-6 flex items-center gap-3 animate-pulse">
       <div className="w-2 h-2 rounded-full bg-stone-400 animate-pulse" />
       <div className="font-mono text-sm">{steps[i]}</div>
     </div>

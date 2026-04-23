@@ -4,7 +4,7 @@ import { api } from '../lib.js';
 function renderMarkdown(text) {
   const escape = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   return escape(text)
-    .replace(/`([^`]+)`/g, '<code class="px-1 py-0.5 rounded bg-stone-200 dark:bg-stone-800 font-mono text-xs">$1</code>')
+    .replace(/`([^`]+)`/g, '<code class="px-1 py-0.5 rounded bg-stone-200 font-mono text-xs">$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\n/g, '<br/>');
 }
@@ -19,13 +19,13 @@ export default function ChatPanel({ cookieProfile }) {
   useEffect(() => {
     setMessages([]);
     setSuggestions([]);
-    if (!cookieProfile) return;
+    if (!cookieProfile?.cookieName) return;
     api('/api/chat', { method: 'POST', body: { cookieProfile, generateSuggestions: true } })
       .then(d => {
         const norm = (d.suggestions || [])
           .map(s => typeof s === 'string' ? s : (s?.question || s?.text || s?.q || JSON.stringify(s)))
           .filter(Boolean);
-        setSuggestions(norm);
+        setSuggestions(norm.slice(0, 4));
       })
       .catch(() => {});
   }, [cookieProfile?.cookieName]);
@@ -51,46 +51,48 @@ export default function ChatPanel({ cookieProfile }) {
     }
   };
 
-  if (!cookieProfile) return null;
+  if (!cookieProfile?.cookieName) return null;
 
   return (
-    <div className="card mt-4">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-stone-200 dark:border-stone-800">
+    <div className="card mt-4 overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-stone-100">
         <span className="font-mono text-sm">{cookieProfile.cookieName}</span>
         <span className="w-2 h-2 rounded-full bg-green-500" />
-        <span className="text-xs text-stone-500">Cookie profile loaded as context</span>
+        <span className="text-xs text-stone-500">Profile loaded as context</span>
       </div>
 
       {suggestions.length > 0 && messages.length === 0 && (
-        <div className="px-4 py-3 flex flex-wrap gap-2 border-b border-stone-200 dark:border-stone-800">
+        <div className="px-5 py-3 flex flex-wrap gap-2 border-b border-stone-100">
           {suggestions.map((s, i) => (
-            <button key={i} onClick={() => send(s)} className="text-xs px-2 py-1 rounded-full bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700">
+            <button key={i} onClick={() => send(s)} className="text-xs px-3 py-1.5 rounded-full bg-white shadow-sm border border-stone-200/80 hover:shadow-md hover:border-stone-300 transition-all duration-200">
               {s}
             </button>
           ))}
         </div>
       )}
 
-      <div ref={scrollRef} className="px-4 py-3 max-h-80 overflow-y-auto space-y-3 text-sm">
+      <div ref={scrollRef} className="px-5 py-3 max-h-60 overflow-y-auto space-y-3 text-sm">
         {messages.map((m, i) => (
-          <div key={i} className={m.role === 'user' ? 'text-right' : ''}>
+          <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
             <div className={
-              'inline-block max-w-[85%] px-3 py-2 rounded-lg ' +
+              'inline-block max-w-[85%] px-4 py-2.5 ' +
               (m.role === 'user'
-                ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
-                : 'bg-stone-100 dark:bg-stone-800')
+                ? 'bg-blue-600/90 text-white rounded-2xl rounded-br-md'
+                : 'bg-white shadow-sm rounded-2xl rounded-bl-md text-stone-800')
             }>
               <div dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />
             </div>
           </div>
         ))}
-        {busy && <div className="text-xs text-stone-500">CookieIQ is thinking…</div>}
+        {busy && <div className="text-xs text-stone-500">CookieIQ is thinking...</div>}
       </div>
 
-      <form onSubmit={e => { e.preventDefault(); send(); }} className="p-3 border-t border-stone-200 dark:border-stone-800 flex gap-2">
-        <input className="input" placeholder="Ask a follow-up…"
-          value={input} onChange={e => setInput(e.target.value)} disabled={busy} />
-        <button type="submit" className="btn-primary" disabled={busy || !input.trim()}>Send</button>
+      <form onSubmit={e => { e.preventDefault(); send(); }} className="p-2 border-t border-stone-100">
+        <div className="bg-white/80 backdrop-blur rounded-2xl shadow-sm p-2 flex gap-2">
+          <input className="border-0 bg-transparent focus:ring-0 focus:outline-none flex-1 text-sm px-3" placeholder="Ask a follow-up..."
+            value={input} onChange={e => setInput(e.target.value)} disabled={busy} />
+          <button type="submit" className="rounded-full bg-blue-600/90 text-white px-4 py-2 text-sm hover:bg-blue-600 transition-all" disabled={busy || !input.trim()}>Send</button>
+        </div>
       </form>
     </div>
   );

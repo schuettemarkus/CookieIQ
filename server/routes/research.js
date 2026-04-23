@@ -4,7 +4,8 @@ import { client, MODEL, extractText, extractJSON } from '../anthropic.js';
 const router = Router();
 
 const SYSTEM_PROMPT = `You are CookieIQ — an expert on cookie compliance, GDPR, ePrivacy, and CCPA.
-Use web_search (max 2 queries) on cookiepedia.co.uk and one major site's cookie policy.
+Use web_search to look up: cookiepedia.co.uk, cookiedatabase.org, and cookiesearch.org for the cookie.
+Also search the vendor's privacy policy and how major websites categorize this cookie.
 Return ONLY valid JSON (no markdown, no preamble) with this exact shape:
 
 {
@@ -45,7 +46,7 @@ router.post('/', async (req, res) => {
       model: MODEL,
       max_tokens: 2500,
       system: SYSTEM_PROMPT,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 2 }],
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }],
       messages: [{ role: 'user', content: `Research: ${query}` }],
     });
     const text = extractText(message);

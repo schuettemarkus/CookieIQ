@@ -4,13 +4,9 @@ import { SEVERITY_PILL, SEVERITY_ICON, SEVERITY_BG } from '../lib.js';
 export default function ImpactAnalysis({ items = [] }) {
   if (!items.length) return null;
   return (
-    <section className="space-y-2">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">
-        What breaks if this cookie doesn't fire
-      </h3>
-      <div className="space-y-2">
+    <div className="space-y-2">
         {items.map((it, idx) => (
-          <div key={idx} className="flex gap-3 p-3 rounded-md border border-stone-200 dark:border-stone-800">
+          <div key={idx} className="flex gap-3 p-3 rounded-xl border border-stone-100 hover:shadow-sm transition-all">
             <div
               className="flex-shrink-0 w-9 h-9 rounded-md flex items-center justify-center text-lg"
               style={{ background: SEVERITY_BG[it.severity] || SEVERITY_BG.None, color: '#3b3b3b' }}
@@ -25,11 +21,10 @@ export default function ImpactAnalysis({ items = [] }) {
                   <span className="text-xs text-stone-500">· {it.affectedParty}</span>
                 )}
               </div>
-              {it.detail && <p className="text-sm text-stone-600 dark:text-stone-400 mt-1">{it.detail}</p>}
+              {it.detail && <p className="text-sm text-stone-600 mt-1">{it.detail}</p>}
             </div>
           </div>
         ))}
-      </div>
-    </section>
+    </div>
   );
 }

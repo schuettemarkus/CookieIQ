@@ -47,7 +47,7 @@ export default function SearchBar({ onSearch, loading, query }) {
           disabled={loading}
         />
         <button type="submit" className="btn-primary whitespace-nowrap" disabled={loading || !q.trim()}>
-          {loading ? 'Researching…' : 'Research cookie'}
+          {loading ? 'Researching…' : 'Research'}
         </button>
       </form>
       {recent.length > 0 && (
@@ -55,7 +55,7 @@ export default function SearchBar({ onSearch, loading, query }) {
           <span className="text-stone-500 self-center">Recent:</span>
           {recent.map(r => (
             <button key={r} onClick={() => { setQ(r); submit(r); }}
-              className="px-2 py-1 rounded-full bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 font-mono">
+              className="rounded-full bg-white shadow-sm border-0 px-3 py-1 text-xs font-mono hover:shadow-md transition-all">
               {r}
             </button>
           ))}

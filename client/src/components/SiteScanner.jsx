@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api, downloadCSV, CATEGORY_PILL } from '../lib.js';
 import CategoryBadge from './CategoryBadge.jsx';
 import LoadingSteps from './LoadingSteps.jsx';
 import GapAnalysis from './GapAnalysis.jsx';
+import ComplianceScorecard from './ComplianceScorecard.jsx';
 
 const SCAN_STEPS = [
   'Launching browser...',
@@ -11,13 +12,24 @@ const SCAN_STEPS = [
   'Identifying vendors...',
 ];
 
-export default function SiteScanner({ onResearchCookie }) {
+export default function SiteScanner({ onResearchCookie, initialResult }) {
   const [url, setUrl] = useState('');
   const [depth, setDepth] = useState('homepage');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
   const [filter, setFilter] = useState('All');
+  const [hideKnown, setHideKnown] = useState(false);
+  const [hideNecessary, setHideNecessary] = useState(false);
+  const [didInit, setDidInit] = useState(false);
+
+  useEffect(() => {
+    if (initialResult && !didInit) {
+      setResult(initialResult);
+      setUrl(initialResult.domain ? 'https://' + initialResult.domain : '');
+      setDidInit(true);
+    }
+  }, [initialResult, didInit]);
 
   const scan = async () => {
     setError(''); setResult(null);
@@ -26,6 +38,7 @@ export default function SiteScanner({ onResearchCookie }) {
     try {
       const data = await api('/api/scan', { method: 'POST', body: { url, depth } });
       setResult(data);
+      try { localStorage.setItem('cookieiq.lastScan', JSON.stringify(data)); } catch {}
     } catch (err) {
       setError(err.message);
     } finally {
@@ -41,7 +54,12 @@ export default function SiteScanner({ onResearchCookie }) {
     Functional: cookies.filter(c => c.suggestedCategory === 'Functional').length,
     Uncategorized: cookies.filter(c => c.suggestedCategory === 'Unknown').length,
   };
-  const visible = filter === 'All' ? cookies : cookies.filter(c => c.suggestedCategory === filter);
+  const visible = cookies.filter(c => {
+    if (filter !== 'All' && c.suggestedCategory !== filter) return false;
+    if (hideKnown && c.knownCookie) return false;
+    if (hideNecessary && c.suggestedCategory === 'Strictly Necessary') return false;
+    return true;
+  });
 
   const researchUnknowns = async () => {
     const unknowns = cookies.filter(c => c.suggestedCategory === 'Unknown');
@@ -52,21 +70,33 @@ export default function SiteScanner({ onResearchCookie }) {
 
   return (
     <div className="space-y-4">
-      <div className="card p-4 flex flex-wrap gap-2 items-center">
-        <input
-          className="input flex-1 min-w-[260px]"
-          placeholder="https://example.com"
-          value={url}
-          onChange={e => setUrl(e.target.value)}
-          disabled={busy}
-        />
-        <select className="input w-auto" value={depth} onChange={e => setDepth(e.target.value)} disabled={busy}>
-          <option value="homepage">Homepage only</option>
-          <option value="crawl">Full crawl</option>
-        </select>
-        <button onClick={scan} className="btn-primary" disabled={busy || !url}>
-          {busy ? 'Scanning…' : 'Scan site'}
-        </button>
+      <div className="card p-4 space-y-3">
+        <div className="flex flex-wrap gap-2 items-center">
+          <input
+            className="input flex-1 min-w-[260px]"
+            placeholder="https://example.com"
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+            disabled={busy}
+          />
+          <button onClick={scan} className="btn-primary" disabled={busy || !url}>
+            {busy ? 'Scanning…' : 'Scan site'}
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-stone-500">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input type="checkbox" className="accent-blue-500 rounded" checked={depth === 'crawl'} onChange={e => setDepth(e.target.checked ? 'crawl' : 'homepage')} disabled={busy} />
+            <span>Crawl internal pages</span>
+          </label>
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input type="checkbox" className="accent-blue-500 rounded" checked={hideKnown} onChange={e => setHideKnown(e.target.checked)} />
+            <span>Hide known cookies</span>
+          </label>
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input type="checkbox" className="accent-blue-500 rounded" checked={hideNecessary} onChange={e => setHideNecessary(e.target.checked)} />
+            <span>Hide strictly necessary</span>
+          </label>
+        </div>
       </div>
 
       {busy && <LoadingSteps steps={SCAN_STEPS} />}
@@ -84,11 +114,11 @@ export default function SiteScanner({ onResearchCookie }) {
           </div>
 
           <div className="card overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-b border-stone-200 dark:border-stone-800">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-b border-stone-200">
               <div className="flex flex-wrap gap-1.5">
                 {['All', ...Object.keys(CATEGORY_PILL)].map(f => (
                   <button key={f} onClick={() => setFilter(f)}
-                    className={'text-xs px-2 py-1 rounded-full ' + (filter === f ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900' : 'bg-stone-100 dark:bg-stone-800')}>
+                    className={'text-xs px-2.5 py-1 rounded-full transition-all ' + (filter === f ? 'bg-blue-50 text-blue-700 font-medium' : 'bg-stone-100 text-stone-600 hover:bg-stone-200')}>
                     {f}
                   </button>
                 ))}
@@ -114,7 +144,7 @@ export default function SiteScanner({ onResearchCookie }) {
             </div>
 
             <table className="w-full text-sm">
-              <thead className="text-left text-xs text-stone-500 border-b border-stone-200 dark:border-stone-800">
+              <thead className="text-left text-xs text-stone-500 border-b border-stone-200">
                 <tr>
                   <th className="px-3 py-2">Name</th>
                   <th>Vendor</th>
@@ -126,7 +156,7 @@ export default function SiteScanner({ onResearchCookie }) {
               <tbody>
                 {visible.map((c, i) => (
                   <tr key={i} className={
-                    'border-b border-stone-100 dark:border-stone-900 ' +
+                    'border-b border-stone-100 ' +
                     (c.suggestedCategory === 'Unknown' ? 'bg-[#FAECE7]/40' : '')
                   }>
                     <td className="px-3 py-2 font-mono text-xs">{c.name}</td>
@@ -134,7 +164,7 @@ export default function SiteScanner({ onResearchCookie }) {
                     <td className="text-xs">{c.duration}</td>
                     <td><CategoryBadge category={c.suggestedCategory} /></td>
                     <td className="px-3 text-right">
-                      <button onClick={() => onResearchCookie(c.name)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                      <button onClick={() => onResearchCookie(c.name)} className="text-xs text-blue-600 hover:underline">
                         {c.suggestedCategory === 'Unknown' ? 'Needs research →' : 'View profile →'}
                       </button>
                     </td>
@@ -147,6 +177,7 @@ export default function SiteScanner({ onResearchCookie }) {
             </table>
           </div>
 
+          <ComplianceScorecard cookies={cookies} />
           <GapAnalysis scanCookies={cookies} />
         </>
       )}
