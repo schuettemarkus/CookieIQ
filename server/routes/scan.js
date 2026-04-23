@@ -1,19 +1,25 @@
 import { Router } from 'express';
 import puppeteer from 'puppeteer-core';
-import { existsSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 
 function getChromePath() {
-  const paths = [
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/google-chrome',
-  ];
-  for (const p of paths) { if (existsSync(p)) return p; }
+  // Env var override (set in Render dashboard if needed)
+  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
+  // Try `which` to find whatever is installed
+  try {
+    const p = execSync('which chromium || which chromium-browser || which google-chrome-stable || which google-chrome', { encoding: 'utf8', timeout: 3000 }).trim();
+    if (p) return p;
+  } catch {}
+  // Broad search as last resort
+  try {
+    const p = execSync('find / -name "chromium" -o -name "chrome" -o -name "chromium-browser" 2>/dev/null | grep -E "bin/(chromium|chrome)" | head -1', { encoding: 'utf8', timeout: 5000 }).trim();
+    if (p) return p;
+  } catch {}
   return null;
 }
 
 const CHROME_PATH = getChromePath();
+console.log('[scan] Chrome path:', CHROME_PATH || 'NOT FOUND');
 import { lookupCookie, vendorFromDomain } from '../cookieLookup.js';
 import { recordScan } from '../db.js';
 
@@ -42,7 +48,8 @@ export async function runScan(targetUrl, depth = 'homepage') {
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process'],
   };
-  if (CHROME_PATH) launchOpts.executablePath = CHROME_PATH;
+  if (!CHROME_PATH) throw new Error('Chrome/Chromium not found on this system. Set CHROME_PATH env var or install chromium.');
+  launchOpts.executablePath = CHROME_PATH;
   const browser = await puppeteer.launch(launchOpts);
   try {
     const page = await browser.newPage();
