@@ -6,8 +6,17 @@ import LegalCase from './LegalCase.jsx';
 import SourcesList from './SourcesList.jsx';
 
 export default function CookieProfile({ profile, onRefresh }) {
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const sourcesRef = useRef(null);
+
+  const scrollToSources = () => {
+    setSourcesOpen(true);
+    setTimeout(() => sourcesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+  };
+
   if (!profile) return null;
   const total = Object.values(profile.categoryBreakdown || {}).reduce((a, b) => a + b, 0);
+  const sourceCount = (profile.sources || []).length + (profile.websitesUsingThisCookie || []).length;
   const recPct = total > 0
     ? Math.round((catCount(profile.categoryBreakdown, profile.recommendedCategory) / total) * 100)
     : 0;
@@ -20,7 +29,7 @@ export default function CookieProfile({ profile, onRefresh }) {
           <div className="text-xs uppercase font-semibold tracking-wide text-amber-700">
             Recommended category
           </div>
-          <div className="text-xs text-stone-500">based on {total} reference{total === 1 ? '' : 's'}</div>
+          <button onClick={scrollToSources} className="text-xs text-blue-600 hover:underline">based on {total} reference{total === 1 ? '' : 's'}</button>
         </div>
         <div className="mt-2 flex items-center gap-3 flex-wrap">
           <span className="text-xl font-semibold">{profile.recommendedCategory}</span>
@@ -94,12 +103,16 @@ export default function CookieProfile({ profile, onRefresh }) {
             <LegalCase profile={profile} />
           </Accordion>
 
-          <Accordion
-            title="Sources & References"
-            count={(profile.sources || []).length + (profile.websitesUsingThisCookie || []).length}
-          >
-            <SourcesContent sources={profile.sources} websites={profile.websitesUsingThisCookie} />
-          </Accordion>
+          <div ref={sourcesRef}>
+            <Accordion
+              title="Sources & References"
+              count={sourceCount}
+              forceOpen={sourcesOpen}
+              onToggle={setSourcesOpen}
+            >
+              <SourcesContent sources={profile.sources} websites={profile.websitesUsingThisCookie} />
+            </Accordion>
+          </div>
 
           {profile.notes && (
             <Accordion title="Notes">
@@ -112,7 +125,9 @@ export default function CookieProfile({ profile, onRefresh }) {
         <footer className="px-6 py-4 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 bg-stone-50 rounded-b-2xl no-print">
           <OptionsMenu profile={profile} onRefresh={onRefresh} />
           <div className="text-xs text-stone-500">
-            {(profile.sources || []).length} sources · researched {new Date(profile.lastResearched).toLocaleString()}
+            <button onClick={scrollToSources} className="text-blue-600 hover:underline">{sourceCount} sources</button>
+            {' · researched '}
+            {new Date(profile.lastResearched).toLocaleString()}
           </div>
         </footer>
       </article>
@@ -120,12 +135,18 @@ export default function CookieProfile({ profile, onRefresh }) {
   );
 }
 
-function Accordion({ title, subtitle, count, children }) {
-  const [open, setOpen] = useState(false);
+function Accordion({ title, subtitle, count, children, forceOpen, onToggle }) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = forceOpen !== undefined ? forceOpen : internalOpen;
+  const toggle = () => {
+    const next = !open;
+    if (onToggle) onToggle(next);
+    else setInternalOpen(next);
+  };
   return (
     <div>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={toggle}
         className="w-full px-6 py-4 flex items-center justify-between gap-3 hover:bg-stone-50/50 transition-all group"
       >
         <div className="flex items-center gap-3 min-w-0">
