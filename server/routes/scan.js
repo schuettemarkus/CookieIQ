@@ -212,8 +212,10 @@ export async function runScan(targetUrl, depth = 'homepage') {
 }
 
 router.post('/', async (req, res) => {
-  const { url, depth = 'homepage' } = req.body || {};
+  let { url, depth = 'homepage' } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url is required' });
+  url = url.trim();
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
   let target;
   try { target = new URL(url); } catch { return res.status(400).json({ error: 'invalid url' }); }
   try {
