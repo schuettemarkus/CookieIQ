@@ -2,7 +2,7 @@ services:
   - type: web
     name: cookieiq-api
     runtime: node
-    buildCommand: npm install && npx puppeteer browsers install chrome
+    buildCommand: npm install && node node_modules/puppeteer/install.mjs
     startCommand: node server/index.js
     envVars:
       - key: ANTHROPIC_API_KEY

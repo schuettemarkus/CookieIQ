@@ -33,10 +33,13 @@ export default function SiteScanner({ onResearchCookie, initialResult }) {
 
   const scan = async () => {
     setError(''); setResult(null);
-    if (!url) return;
+    let target = url.trim();
+    if (!target) return;
+    if (!/^https?:\/\//i.test(target)) target = 'https://' + target;
+    setUrl(target);
     setBusy(true);
     try {
-      const data = await api('/api/scan', { method: 'POST', body: { url, depth } });
+      const data = await api('/api/scan', { method: 'POST', body: { url: target, depth } });
       setResult(data);
       try { localStorage.setItem('cookieiq.lastScan', JSON.stringify(data)); } catch {}
     } catch (err) {
@@ -71,18 +74,18 @@ export default function SiteScanner({ onResearchCookie, initialResult }) {
   return (
     <div className="space-y-4">
       <div className="card p-4 space-y-3">
-        <div className="flex flex-wrap gap-2 items-center">
+        <form onSubmit={e => { e.preventDefault(); scan(); }} className="flex flex-wrap gap-2 items-center">
           <input
             className="input flex-1 min-w-[260px]"
-            placeholder="https://example.com"
+            placeholder="example.com"
             value={url}
             onChange={e => setUrl(e.target.value)}
             disabled={busy}
           />
-          <button onClick={scan} className="btn-primary" disabled={busy || !url}>
+          <button type="submit" className="btn-primary" disabled={busy || !url.trim()}>
             {busy ? 'Scanning…' : 'Scan site'}
           </button>
-        </div>
+        </form>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-stone-500">
           <label className="flex items-center gap-1.5 cursor-pointer select-none">
             <input type="checkbox" className="accent-blue-500 rounded" checked={depth === 'crawl'} onChange={e => setDepth(e.target.checked ? 'crawl' : 'homepage')} disabled={busy} />

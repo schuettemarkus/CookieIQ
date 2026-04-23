@@ -3,4 +3,5 @@ node_modules
 *.db
 *.sqlite
 client/dist
+.cache
 .DS_Store
