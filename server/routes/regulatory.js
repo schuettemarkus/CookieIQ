@@ -64,11 +64,23 @@ async function fetchRegulatory() {
     model: MODEL,
     max_tokens: 4000,
     system: SYSTEM_PROMPT,
-    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 8 }],
-    messages: [{ role: 'user', content: 'What are the latest global regulatory developments affecting cookies, tracking, and consent as of today? Search for recent enforcement actions, new legislation, and DPA guidance.' }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+    messages: [{ role: 'user', content: 'What are the latest global regulatory developments affecting cookies, tracking, and consent as of today? Search for recent enforcement actions, new legislation, and DPA guidance. Return ONLY the JSON object, no other text.' }],
   });
   const text = extractText(message);
-  return extractJSON(text);
+  try {
+    return extractJSON(text);
+  } catch (e) {
+    // If full parse fails, try a second pass asking the model to fix it.
+    console.error('[regulatory] JSON parse failed, attempting repair. Raw length:', text.length);
+    const repair = await client.messages.create({
+      model: MODEL,
+      max_tokens: 4000,
+      system: 'Convert the following text into valid JSON matching the structure described. Return ONLY the JSON, no markdown, no preamble, no <cite> tags.',
+      messages: [{ role: 'user', content: text }],
+    });
+    return extractJSON(extractText(repair));
+  }
 }
 
 function getCached() {
