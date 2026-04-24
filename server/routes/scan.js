@@ -65,7 +65,9 @@ export async function runScan(targetUrl, depth = 'homepage') {
       } catch {}
     });
 
-    await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.goto(targetUrl, { waitUntil: 'networkidle0', timeout: 45000 }).catch(() =>
+      page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 20000 })
+    );
 
     // Pre-consent snapshot uses CDP so we get third-party cookies too.
     const preConsentRaw = (await cdp.send('Network.getAllCookies')).cookies;
@@ -221,7 +223,7 @@ router.post('/', async (req, res) => {
   try {
     const cookies = await Promise.race([
       runScan(url, depth),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('Scan timeout (>30s)')), 35000)),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Scan timeout — site took too long to load. Try again or use "Homepage only" mode.')), 60000)),
     ]);
     recordScan(target.hostname, cookies);
     res.json({ domain: target.hostname, cookies });
