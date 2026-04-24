@@ -37,7 +37,15 @@ function durationFromExpires(expires) {
 export async function runScan(targetUrl, depth = 'homepage') {
   const launchOpts = {
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process'],
+    args: [
+      '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+      '--disable-gpu', '--single-process', '--no-zygote',
+      '--disable-extensions', '--disable-background-networking',
+      '--disable-default-apps', '--disable-sync', '--disable-translate',
+      '--mute-audio', '--no-first-run', '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding', '--disable-component-update',
+      '--disable-hang-monitor',
+    ],
   };
   if (!CHROME_PATH) throw new Error('Chrome/Chromium not found on this system. Set CHROME_PATH env var or install chromium.');
   launchOpts.executablePath = CHROME_PATH;
@@ -49,25 +57,35 @@ export async function runScan(targetUrl, depth = 'homepage') {
     );
     const targetHost = new URL(targetUrl).hostname;
 
+    // Track third-party hosts + block heavy resources for speed.
+    const trackerHosts = new Map();
+    await page.setRequestInterception(true);
+    page.on('request', req => {
+      const type = req.resourceType();
+      // Track third-party hosts before deciding to block.
+      try {
+        const host = new URL(req.url()).hostname;
+        if (host && host !== targetHost && !host.endsWith('.' + targetHost)) {
+          if (!trackerHosts.has(host)) trackerHosts.set(host, { types: new Set(), requests: 0 });
+          const entry = trackerHosts.get(host);
+          entry.types.add(type);
+          entry.requests++;
+        }
+      } catch {}
+      // Block heavy resources — we only need cookies, not rendering.
+      if (['image', 'media', 'font', 'stylesheet'].includes(type)) {
+        req.abort().catch(() => {});
+      } else {
+        req.continue().catch(() => {});
+      }
+    });
+
     const cdp = await page.target().createCDPSession();
     await cdp.send('Network.enable');
 
-    // Track every distinct third-party host hit, with sample request types.
-    const trackerHosts = new Map(); // host -> { types: Set, requests: number }
-    page.on('request', req => {
-      try {
-        const host = new URL(req.url()).hostname;
-        if (!host || host === targetHost || host.endsWith('.' + targetHost)) return;
-        if (!trackerHosts.has(host)) trackerHosts.set(host, { types: new Set(), requests: 0 });
-        const entry = trackerHosts.get(host);
-        entry.types.add(req.resourceType());
-        entry.requests++;
-      } catch {}
-    });
-
-    await page.goto(targetUrl, { waitUntil: 'networkidle0', timeout: 45000 }).catch(() =>
-      page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 20000 })
-    );
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // Wait a few seconds for tracking scripts to fire.
+    await new Promise(r => setTimeout(r, 3000));
 
     // Pre-consent snapshot uses CDP so we get third-party cookies too.
     const preConsentRaw = (await cdp.send('Network.getAllCookies')).cookies;
