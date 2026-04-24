@@ -83,8 +83,12 @@ export async function runScan(targetUrl, depth = 'homepage') {
     const cdp = await page.target().createCDPSession();
     await cdp.send('Network.enable');
 
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    // Wait a few seconds for tracking scripts to fire.
+    // Load page with generous timeout, catch navigation errors gracefully.
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 50000 }).catch(err => {
+      // If navigation timed out we may still have useful cookies — continue.
+      if (!err.message.includes('net::')) console.log('[scan] nav warning:', err.message);
+    });
+    // Wait for tracking scripts to fire.
     await new Promise(r => setTimeout(r, 3000));
 
     // Pre-consent snapshot uses CDP so we get third-party cookies too.
@@ -241,7 +245,7 @@ router.post('/', async (req, res) => {
   try {
     const cookies = await Promise.race([
       runScan(url, depth),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('Scan timeout — site took too long to load. Try again or use "Homepage only" mode.')), 60000)),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Scan timeout — site took too long to load. Try again or use "Homepage only" mode.')), 90000)),
     ]);
     recordScan(target.hostname, cookies);
     res.json({ domain: target.hostname, cookies });
