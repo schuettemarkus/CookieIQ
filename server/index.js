@@ -7,6 +7,7 @@ import researchRoute from './routes/research.js';
 import chatRoute from './routes/chat.js';
 import scanRoute, { runScan } from './routes/scan.js';
 import historyRoute from './routes/history.js';
+import regulatoryRoute from './routes/regulatory.js';
 
 const app = express();
 app.use(cors());
@@ -16,6 +17,7 @@ app.use('/api/research', researchRoute);
 app.use('/api/chat', chatRoute);
 app.use('/api/scan', scanRoute);
 app.use('/api/history', historyRoute);
+app.use('/api/regulatory', regulatoryRoute);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

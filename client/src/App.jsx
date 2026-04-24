@@ -9,13 +9,15 @@ import ChatPage from './components/ChatPage.jsx';
 import PrivacyPolicy from './components/PrivacyPolicy.jsx';
 import TermsOfService from './components/TermsOfService.jsx';
 import CookiePolicyPage from './components/CookiePolicyPage.jsx';
+import RegulatoryMap from './components/RegulatoryMap.jsx';
 import CategoryBadge from './components/CategoryBadge.jsx';
 import { api } from './lib.js';
 
 const NAV_ITEMS = [
-  { id: 'lookup', label: 'Lookup' },
-  { id: 'scan',   label: 'Scanner' },
-  { id: 'chat',   label: 'AI Consultant' },
+  { id: 'lookup',     label: 'Lookup' },
+  { id: 'scan',       label: 'Scanner' },
+  { id: 'chat',       label: 'AI Consultant' },
+  { id: 'regulatory', label: 'Regulatory' },
 ];
 
 export default function App() {
@@ -136,6 +138,8 @@ export default function App() {
           </div>
         )}
 
+        {view === 'regulatory' && <RegulatoryMap />}
+
         {view === 'privacy' && <PrivacyPolicy />}
         {view === 'terms' && <TermsOfService />}
         {view === 'cookies' && <CookiePolicyPage />}
@@ -163,9 +167,10 @@ function Footer({ onNavigate }) {
 
 function HomePage({ onNavigate }) {
   const TILES = [
-    { id: 'lookup', title: 'Cookie Lookup', subtitle: 'Research any cookie or tracking technology' },
-    { id: 'scan',   title: 'Site Scanner', subtitle: 'Audit a website for cookies & compliance gaps' },
-    { id: 'chat',   title: 'AI Consultant', subtitle: 'GDPR guidance, policy review, consent strategy & more' },
+    { id: 'lookup',     title: 'Cookie Lookup', subtitle: 'Research any cookie or tracking technology' },
+    { id: 'scan',       title: 'Site Scanner', subtitle: 'Audit a website for cookies & compliance gaps' },
+    { id: 'chat',       title: 'AI Consultant', subtitle: 'GDPR guidance, policy review, consent strategy & more' },
+    { id: 'regulatory', title: 'Regulatory Map', subtitle: 'Global compliance pressure by jurisdiction, updated weekly' },
   ];
 
   const [input, setInput] = useState('');
@@ -297,7 +302,7 @@ function HomePage({ onNavigate }) {
       )}
 
       {/* Feature tiles */}
-      <div className="grid grid-cols-3 gap-6 max-w-3xl mx-auto w-full">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-5 max-w-4xl mx-auto w-full">
         {TILES.map((tile) => (
           <button key={tile.id} onClick={() => onNavigate(tile.id)}
             className="card px-7 py-8 text-left hover:shadow-md hover:scale-[1.02] transition-all duration-200 group">
@@ -393,6 +398,13 @@ function TileIcon({ id }) {
       <div className="w-12 h-12 rounded-2xl bg-purple-50 flex items-center justify-center">
         <svg className="w-6 h-6 text-purple-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+        </svg>
+      </div>
+    ),
+    regulatory: (
+      <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center">
+        <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5a17.92 17.92 0 01-8.716-2.247m0 0A8.966 8.966 0 013 12c0-1.264.26-2.467.732-3.558" />
         </svg>
       </div>
     ),
