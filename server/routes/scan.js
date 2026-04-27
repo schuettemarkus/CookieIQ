@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import puppeteer from 'puppeteer-core';
 import { execSync } from 'node:child_process';
+import { lookupCookie, vendorFromDomain } from '../cookieLookup.js';
+import { recordScan } from '../db.js';
 
 function getChromePath() {
   if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
@@ -11,17 +13,8 @@ function getChromePath() {
 
 const CHROME_PATH = getChromePath();
 console.log('[scan] Chrome path:', CHROME_PATH || 'NOT FOUND');
-import { lookupCookie, vendorFromDomain } from '../cookieLookup.js';
-import { recordScan } from '../db.js';
 
 const router = Router();
-
-const CONSENT_SELECTORS = [
-  '#onetrust-banner-sdk', '#onetrust-accept-btn-handler',
-  '.truste_box_overlay', '#truste-consent-track',
-  '[id*="cookie"][id*="banner"]', '[class*="cookie"][class*="banner"]',
-  '[id*="consent"]', '[class*="consent"]',
-];
 
 function durationFromExpires(expires) {
   if (!expires || expires < 0) return 'Session';
@@ -35,44 +28,45 @@ function durationFromExpires(expires) {
 }
 
 export async function runScan(targetUrl, depth = 'homepage') {
-  const launchOpts = {
+  if (!CHROME_PATH) throw new Error('Chrome not found. Set CHROME_PATH env var.');
+
+  const browser = await puppeteer.launch({
     headless: 'new',
+    executablePath: CHROME_PATH,
     args: [
       '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
       '--disable-gpu', '--single-process', '--no-zygote',
       '--disable-extensions', '--disable-background-networking',
       '--disable-default-apps', '--disable-sync', '--disable-translate',
-      '--mute-audio', '--no-first-run', '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding', '--disable-component-update',
-      '--disable-hang-monitor',
+      '--mute-audio', '--no-first-run',
     ],
-  };
-  if (!CHROME_PATH) throw new Error('Chrome/Chromium not found on this system. Set CHROME_PATH env var or install chromium.');
-  launchOpts.executablePath = CHROME_PATH;
-  const browser = await puppeteer.launch(launchOpts);
+  });
+
+  let page;
   try {
-    const page = await browser.newPage();
+    page = await browser.newPage();
     await page.setUserAgent(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'
     );
-    const targetHost = new URL(targetUrl).hostname;
+    // Set viewport small to reduce rendering work
+    await page.setViewport({ width: 800, height: 600 });
 
-    // Track third-party hosts + block heavy resources for speed.
+    const targetHost = new URL(targetUrl).hostname;
     const trackerHosts = new Map();
+
+    // Block heavy resources + track third parties
     await page.setRequestInterception(true);
     page.on('request', req => {
       const type = req.resourceType();
-      // Track third-party hosts before deciding to block.
       try {
         const host = new URL(req.url()).hostname;
-        if (host && host !== targetHost && !host.endsWith('.' + targetHost)) {
+        if (host && host !== targetHost && !host.endsWith('.' + targetHost) && !targetHost.endsWith('.' + host)) {
           if (!trackerHosts.has(host)) trackerHosts.set(host, { types: new Set(), requests: 0 });
           const entry = trackerHosts.get(host);
           entry.types.add(type);
           entry.requests++;
         }
       } catch {}
-      // Block heavy resources — we only need cookies, not rendering.
       if (['image', 'media', 'font', 'stylesheet'].includes(type)) {
         req.abort().catch(() => {});
       } else {
@@ -80,99 +74,106 @@ export async function runScan(targetUrl, depth = 'homepage') {
       }
     });
 
-    const cdp = await page.target().createCDPSession();
-    await cdp.send('Network.enable');
-
-    // Load page with generous timeout, catch navigation errors gracefully.
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 50000 }).catch(err => {
-      // If navigation timed out we may still have useful cookies — continue.
-      if (!err.message.includes('net::')) console.log('[scan] nav warning:', err.message);
-    });
-    // Wait for tracking scripts to fire.
-    await new Promise(r => setTimeout(r, 3000));
-
-    // Pre-consent snapshot uses CDP so we get third-party cookies too.
-    const preConsentRaw = (await cdp.send('Network.getAllCookies')).cookies;
-    const preConsentNames = new Set(preConsentRaw.map(c => c.name + '|' + c.domain));
-
-    // Try to dismiss consent banners (best-effort).
-    for (const sel of CONSENT_SELECTORS) {
-      try {
-        const el = await page.$(sel);
-        if (el) {
-          await el.click({ delay: 50 }).catch(() => {});
-          await new Promise(r => setTimeout(r, 600));
-        }
-      } catch {}
+    // Navigate — catch timeout gracefully, still collect what we got
+    let navOk = true;
+    try {
+      await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
+    } catch (e) {
+      console.log('[scan] nav partial:', e.message?.slice(0, 80));
+      navOk = false;
     }
 
-    if (depth === 'crawl') {
-      // Light same-origin crawl: visit up to 3 internal links.
-      const links = await page.$$eval('a[href]', as =>
-        as.map(a => a.href).slice(0, 30)
-      );
-      const internal = [...new Set(links.filter(h => {
-        try { return new URL(h).hostname === targetHost; } catch { return false; }
-      }))].slice(0, 3);
-      for (const link of internal) {
+    // Give scripts a moment to fire cookies
+    await new Promise(r => setTimeout(r, navOk ? 2000 : 1000));
+
+    // Collect cookies via CDP — most reliable method
+    let cookies = [];
+    try {
+      const cdp = await page.createCDPSession();
+      await cdp.send('Network.enable');
+      cookies = (await cdp.send('Network.getAllCookies')).cookies || [];
+      await cdp.detach().catch(() => {});
+    } catch (e) {
+      console.log('[scan] CDP fallback to page.cookies:', e.message?.slice(0, 80));
+      try { cookies = await page.cookies(); } catch {}
+    }
+
+    // Collect storage — wrapped in try/catch since page might be in bad state
+    let storage = { localStorage: [], sessionStorage: [], fingerprintSignals: [] };
+    try {
+      storage = await page.evaluate(() => {
+        const dump = obj => {
+          const out = [];
+          try { for (let i = 0; i < obj.length; i++) out.push(obj.key(i)); } catch {}
+          return out;
+        };
+        const fpSignals = [];
         try {
-          await page.goto(link, { waitUntil: 'networkidle2', timeout: 20000 });
+          const scripts = [...document.querySelectorAll('script[src]')].map(s => s.src.toLowerCase());
+          for (const src of scripts) {
+            for (const lib of ['fingerprintjs', 'fp2', 'clientjs', 'evercookie']) {
+              if (src.includes(lib)) fpSignals.push(lib);
+            }
+          }
         } catch {}
-      }
+        return {
+          localStorage: dump(localStorage),
+          sessionStorage: dump(sessionStorage),
+          fingerprintSignals: fpSignals,
+        };
+      });
+    } catch (e) {
+      console.log('[scan] storage eval failed:', e.message?.slice(0, 80));
     }
 
-    const cookies = (await cdp.send('Network.getAllCookies')).cookies;
-
-    const storage = await page.evaluate(() => {
-      const dump = obj => {
-        const out = [];
-        try { for (let i = 0; i < obj.length; i++) out.push(obj.key(i)); } catch {}
-        return out;
-      };
-      // Detect fingerprinting signals.
-      const fpSignals = [];
+    // Crawl extra pages if requested
+    if (depth === 'crawl') {
       try {
-        const scripts = [...document.querySelectorAll('script[src]')].map(s => s.src);
-        const fpLibs = ['fingerprintjs', 'fp2', 'clientjs', 'evercookie', 'canvas-fingerprint'];
-        for (const src of scripts) {
-          const lower = src.toLowerCase();
-          for (const lib of fpLibs) if (lower.includes(lib)) fpSignals.push(lib);
+        const links = await page.$$eval('a[href]', as => as.map(a => a.href).slice(0, 20));
+        const internal = [...new Set(links.filter(h => {
+          try { return new URL(h).hostname === targetHost; } catch { return false; }
+        }))].slice(0, 3);
+        for (const link of internal) {
+          try {
+            await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 15000 });
+            await new Promise(r => setTimeout(r, 1000));
+            const extra = await page.cookies();
+            cookies.push(...extra);
+          } catch {}
         }
-        // Check for canvas fingerprint read
-        const canvases = document.querySelectorAll('canvas');
-        if (canvases.length > 0) fpSignals.push('canvas-element-present');
       } catch {}
-      return {
-        localStorage: dump(localStorage),
-        sessionStorage: dump(sessionStorage),
-        documentCookie: document.cookie,
-        fingerprintSignals: fpSignals,
-      };
-    });
+    }
 
-    const isThirdPartyDomain = (cookieDomain) => {
-      const d = (cookieDomain || '').replace(/^\./, '').toLowerCase();
-      return !!d && d !== targetHost && !d.endsWith('.' + targetHost) && !targetHost.endsWith('.' + d);
+    // Build results
+    const isThirdParty = (d) => {
+      const clean = (d || '').replace(/^\./, '').toLowerCase();
+      return !!clean && clean !== targetHost && !clean.endsWith('.' + targetHost) && !targetHost.endsWith('.' + clean);
     };
 
-    const results = cookies.map(c => {
+    // Dedupe cookies by name+domain
+    const seen = new Set();
+    const results = [];
+    for (const c of cookies) {
+      const key = c.name + '|' + c.domain;
+      if (seen.has(key)) continue;
+      seen.add(key);
       const meta = lookupCookie(c.name, c.domain);
       const vendor = meta.vendor || vendorFromDomain(c.domain);
-      const thirdParty = isThirdPartyDomain(c.domain);
-      return {
+      const thirdParty = isThirdParty(c.domain);
+      results.push({
         name: c.name,
         domain: c.domain,
         duration: durationFromExpires(c.expires),
         type: thirdParty ? 'HTTP Cookie (3rd party)' : 'HTTP Cookie',
         vendor: vendor || null,
         thirdParty,
-        preConsent: preConsentNames.has(c.name + '|' + c.domain),
+        preConsent: true,
         suggestedCategory: meta.suggestedCategory,
         knownCookie: meta.knownCookie,
         description: meta.description || null,
         source: meta.source || null,
-      };
-    });
+      });
+    }
 
     for (const key of storage.localStorage) {
       const meta = lookupCookie(key, targetHost);
@@ -191,47 +192,33 @@ export async function runScan(targetUrl, depth = 'homepage') {
       });
     }
 
-    // Surface every third-party host that fired requests, even when no cookie was set.
-    // Distinguishes images/scripts/xhr so analysts see beacons vs. embedded SDKs.
+    // Third-party tracker hosts (no cookie set)
     const seenHosts = new Set(results.map(r => (r.domain || '').replace(/^\./, '').toLowerCase()));
     for (const [host, info] of trackerHosts) {
       if (seenHosts.has(host)) continue;
       const vendor = vendorFromDomain(host);
-      const isLikelyBeacon = info.types.has('image') || info.types.has('ping') || info.types.has('beacon');
+      const isBeacon = info.types.has('image') || info.types.has('ping') || info.types.has('beacon');
       results.push({
-        name: `tracker · ${host}`,
-        domain: host,
-        duration: 'N/A',
-        type: isLikelyBeacon ? 'Tracking pixel' : 'Third-party request',
-        vendor: vendor || null,
-        thirdParty: true,
-        preConsent: true,
+        name: `tracker · ${host}`, domain: host, duration: 'N/A',
+        type: isBeacon ? 'Tracking pixel' : 'Third-party request',
+        vendor: vendor || null, thirdParty: true, preConsent: true,
         suggestedCategory: vendor ? 'Advertising' : 'Unknown',
-        knownCookie: !!vendor,
-        requestCount: info.requests,
+        knownCookie: !!vendor, requestCount: info.requests,
       });
-      seenHosts.add(host);
     }
 
-    // Fingerprinting signals.
     if (storage.fingerprintSignals?.length > 0) {
       results.push({
         name: `fingerprinting: ${storage.fingerprintSignals.join(', ')}`,
-        domain: targetHost,
-        duration: 'N/A',
-        type: 'Fingerprint',
-        vendor: null,
-        thirdParty: false,
-        preConsent: true,
-        suggestedCategory: 'Advertising',
-        knownCookie: false,
+        domain: targetHost, duration: 'N/A', type: 'Fingerprint',
+        vendor: null, thirdParty: false, preConsent: true,
+        suggestedCategory: 'Advertising', knownCookie: false,
       });
     }
 
-    await cdp.detach().catch(() => {});
     return results;
   } finally {
-    await browser.close();
+    await browser.close().catch(() => {});
   }
 }
 
@@ -245,12 +232,12 @@ router.post('/', async (req, res) => {
   try {
     const cookies = await Promise.race([
       runScan(url, depth),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('Scan timeout — site took too long to load. Try again or use "Homepage only" mode.')), 90000)),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Scan timed out. The site may be blocking automated browsers or is too slow to respond.')), 60000)),
     ]);
     recordScan(target.hostname, cookies);
     res.json({ domain: target.hostname, cookies });
   } catch (err) {
-    console.error('[scan]', err);
+    console.error('[scan]', err.message);
     res.status(500).json({ error: err.message || 'Scan failed' });
   }
 });

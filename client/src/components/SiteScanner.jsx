@@ -14,13 +14,11 @@ const SCAN_STEPS = [
 
 export default function SiteScanner({ onResearchCookie, initialResult }) {
   const [url, setUrl] = useState('');
-  const [depth, setDepth] = useState('homepage');
+  const [scanAll, setScanAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
   const [filter, setFilter] = useState('All');
-  const [hideKnown, setHideKnown] = useState(false);
-  const [hideNecessary, setHideNecessary] = useState(false);
   const [didInit, setDidInit] = useState(false);
 
   useEffect(() => {
@@ -39,7 +37,7 @@ export default function SiteScanner({ onResearchCookie, initialResult }) {
     setUrl(target);
     setBusy(true);
     try {
-      const data = await api('/api/scan', { method: 'POST', body: { url: target, depth } });
+      const data = await api('/api/scan', { method: 'POST', body: { url: target, depth: scanAll ? 'crawl' : 'homepage' } });
       setResult(data);
       try { localStorage.setItem('cookieiq.lastScan', JSON.stringify(data)); } catch {}
     } catch (err) {
@@ -57,12 +55,7 @@ export default function SiteScanner({ onResearchCookie, initialResult }) {
     Functional: cookies.filter(c => c.suggestedCategory === 'Functional').length,
     Uncategorized: cookies.filter(c => c.suggestedCategory === 'Unknown').length,
   };
-  const visible = cookies.filter(c => {
-    if (filter !== 'All' && c.suggestedCategory !== filter) return false;
-    if (hideKnown && c.knownCookie) return false;
-    if (hideNecessary && c.suggestedCategory === 'Strictly Necessary') return false;
-    return true;
-  });
+  const visible = filter === 'All' ? cookies : cookies.filter(c => c.suggestedCategory === filter);
 
   const researchUnknowns = async () => {
     const unknowns = cookies.filter(c => c.suggestedCategory === 'Unknown');
@@ -86,20 +79,10 @@ export default function SiteScanner({ onResearchCookie, initialResult }) {
             {busy ? 'Scanning…' : 'Scan site'}
           </button>
         </form>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-stone-500">
-          <label className="flex items-center gap-1.5 cursor-pointer select-none">
-            <input type="checkbox" className="accent-blue-500 rounded" checked={depth === 'crawl'} onChange={e => setDepth(e.target.checked ? 'crawl' : 'homepage')} disabled={busy} />
-            <span>Crawl internal pages</span>
-          </label>
-          <label className="flex items-center gap-1.5 cursor-pointer select-none">
-            <input type="checkbox" className="accent-blue-500 rounded" checked={hideKnown} onChange={e => setHideKnown(e.target.checked)} />
-            <span>Hide known cookies</span>
-          </label>
-          <label className="flex items-center gap-1.5 cursor-pointer select-none">
-            <input type="checkbox" className="accent-blue-500 rounded" checked={hideNecessary} onChange={e => setHideNecessary(e.target.checked)} />
-            <span>Hide strictly necessary</span>
-          </label>
-        </div>
+        <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-stone-500">
+          <input type="checkbox" className="accent-blue-500 rounded" checked={scanAll} onChange={e => setScanAll(e.target.checked)} disabled={busy} />
+          <span>Scan all pages (slower — crawls internal links)</span>
+        </label>
       </div>
 
       {busy && <LoadingSteps steps={SCAN_STEPS} />}
