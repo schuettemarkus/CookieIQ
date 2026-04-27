@@ -182,7 +182,7 @@ function HomePage({ onNavigate }) {
     if (!v || busy) return;
 
     // URL → scan
-    if (/^https?:\/\//i.test(v) || /^[a-z0-9-]+\.[a-z]{2,}/i.test(v)) {
+    if (/^https?:\/\//i.test(v) || /\.[a-z]{2,}$/i.test(v)) {
       const url = v.startsWith('http') ? v : 'https://' + v;
       setBusy(true);
       setResult(null);
@@ -288,7 +288,7 @@ function HomePage({ onNavigate }) {
         </div>
       )}
 
-      {busy && (
+      {busy && !result && (
         <div className="max-w-xl mx-auto w-full mb-16">
           <div className="card p-5 flex items-center gap-3">
             <div className="flex gap-1">
@@ -296,7 +296,9 @@ function HomePage({ onNavigate }) {
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
-            <span className="text-sm text-stone-500">Working on it...</span>
+            <span className="text-sm text-stone-500">
+              {/\.[a-z]{2,}$/i.test(input.trim()) ? 'Scanning site — this may take up to 60 seconds...' : 'Working on it...'}
+            </span>
           </div>
         </div>
       )}
