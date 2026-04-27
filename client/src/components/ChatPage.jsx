@@ -360,7 +360,8 @@ export default function ChatPage({ onSendRef, initialMessages }) {
     }
   }, [initialMessages]);
 
-  const scanContext = contextMode === 'mysite' ? getScanContext() : null;
+  const scanData = getScanContext();
+  const scanContext = contextMode === 'mysite' ? scanData : null;
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 9e9, behavior: 'smooth' });
@@ -487,13 +488,13 @@ export default function ChatPage({ onSendRef, initialMessages }) {
               onClick={() => setContextMode('mysite')}
               className={'px-3 py-1 rounded-full text-xs transition-all ' +
                 (contextMode === 'mysite' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-stone-500 hover:text-stone-700')}>
-              My Site
+              {scanData ? scanData.domain : 'My Site'}
             </button>
           </div>
           {contextMode === 'mysite' && (
             <span className="text-[10px] text-stone-400">
               {scanContext
-                ? `${scanContext.cookieCount} cookies from ${scanContext.domain}`
+                ? `${scanContext.cookieCount} cookies loaded`
                 : 'No scan data — run a scan first'}
             </span>
           )}
