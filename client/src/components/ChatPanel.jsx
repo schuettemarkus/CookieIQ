@@ -1,13 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../lib.js';
-
-function renderMarkdown(text) {
-  const escape = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-  return escape(text)
-    .replace(/`([^`]+)`/g, '<code class="px-1 py-0.5 rounded bg-stone-200 font-mono text-xs">$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br/>');
-}
+import renderRichHTML from '../renderHTML.js';
 
 export default function ChatPanel({ cookieProfile }) {
   const [messages, setMessages] = useState([]);
@@ -80,7 +73,7 @@ export default function ChatPanel({ cookieProfile }) {
                 ? 'bg-blue-600/90 text-white rounded-2xl rounded-br-md'
                 : 'bg-white shadow-sm rounded-2xl rounded-bl-md text-stone-800')
             }>
-              <div dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />
+              <div dangerouslySetInnerHTML={{ __html: renderRichHTML(m.content) }} />
             </div>
           </div>
         ))}

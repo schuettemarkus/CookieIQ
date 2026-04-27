@@ -11,6 +11,7 @@ import TermsOfService from './components/TermsOfService.jsx';
 import CookiePolicyPage from './components/CookiePolicyPage.jsx';
 import RegulatoryMap from './components/RegulatoryMap.jsx';
 import CategoryBadge from './components/CategoryBadge.jsx';
+import renderRichHTML from './renderHTML.js';
 import { api } from './lib.js';
 
 const NAV_ITEMS = [
@@ -371,8 +372,8 @@ function InlineScan({ scan, onFullScan }) {
 function InlineAnswer({ question, reply, onContinue }) {
   return (
     <div className="card p-5 space-y-3">
-      <div className="text-xs text-stone-400 font-medium">{question}</div>
-      <p className="text-sm text-stone-700 leading-relaxed">{reply}</p>
+      <div className="text-xs text-stone-400 font-medium mb-2">{question}</div>
+      <div className="text-sm" dangerouslySetInnerHTML={{ __html: renderRichHTML(reply) }} />
       <button onClick={onContinue} className="mt-3 w-full text-center text-sm font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-xl py-2.5 transition-all">
         Continue in AI Consultant →
       </button>
