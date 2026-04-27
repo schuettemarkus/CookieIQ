@@ -23,14 +23,26 @@ export const SEVERITY_BG = {
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
-export async function api(path, opts = {}) {
+export async function api(path, opts = {}, _retries = 0) {
   const res = await fetch(API_BASE + path, {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) {
+    const msg = data.error || `Request failed (${res.status})`;
+    // Auto-retry rate limits up to 2 times with backoff.
+    if (res.status === 429 || msg.includes('rate_limit')) {
+      if (_retries < 2) {
+        const wait = ((_retries + 1) * 15) + Math.random() * 5;
+        await new Promise(r => setTimeout(r, wait * 1000));
+        return api(path, opts, _retries + 1);
+      }
+      throw new Error('Rate limit reached — too many requests. Wait a moment and try again.');
+    }
+    throw new Error(msg);
+  }
   return data;
 }
 
